@@ -37,15 +37,19 @@ function MaskFX:draw(texture)
     end
     Draw.popCanvas()
     love.graphics.setColor(1, 1, 1)
-    love.graphics.stencil(function()
-        local last_shader = love.graphics.getShader()
-        love.graphics.setShader(Kristal.Shaders["Mask"])
-        love.graphics.draw(mask)
-        love.graphics.setShader(last_shader)
-    end, "replace", 1)
-    love.graphics.setStencilTest("greater", 0)
+
+    love.graphics.setColorMask(false)
+    love.graphics.setStencilMode("replace", "always", 1)
+
+    local last_shader = love.graphics.getShader()
+    love.graphics.setShader(Kristal.Shaders["Mask"])
+    love.graphics.draw(mask)
+    love.graphics.setShader(last_shader)
+
+    love.graphics.setStencilMode("keep", "greater", 0)
+    love.graphics.setColorMask(true)
     Draw.drawCanvas(texture)
-    love.graphics.setStencilTest()
+    love.graphics.setStencilMode()
 end
 
 return MaskFX
