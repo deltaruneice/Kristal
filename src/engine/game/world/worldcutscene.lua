@@ -9,6 +9,8 @@ function WorldCutscene:init(group, id, ...)
     self.textbox_actor = nil
     self.textbox_speaker = nil
     self.textbox_top = nil
+    self.old_textbox_actor = nil
+
 
     self.choicebox = nil
     self.choice = 0
@@ -48,6 +50,14 @@ function WorldCutscene:update()
     end
     self.moving_objects = new_moving
 
+    if self.textbox and self.textbox:isRemoved() then
+        self.textbox = nil
+    end
+
+    if not self.textbox then
+        self.old_textbox_actor = nil
+    end
+
     super:update(self)
 end
 
@@ -60,7 +70,7 @@ function WorldCutscene:onEnd()
     end
 
     if self.textbox then
-        self.textbox:remove()
+        self.textbox:close()
     end
 
     if self.choicebox then
@@ -445,7 +455,7 @@ function WorldCutscene:text(text, portrait, actor, options)
     options = options or {}
 
     if self.textbox then
-        self.textbox:remove()
+        self.textbox:close()
     end
 
     if self.choicebox then
@@ -462,6 +472,7 @@ function WorldCutscene:text(text, portrait, actor, options)
     self.textbox.layer = WORLD_LAYERS["textbox"]
     Game.world:addChild(self.textbox)
     self.textbox:setParallax(0, 0)
+    self.textbox:setCutscene(self)
 
     local speaker = self.textbox_speaker
     if not speaker and isClass(actor) and actor:includes(Character) then
@@ -472,12 +483,31 @@ function WorldCutscene:text(text, portrait, actor, options)
         self.textbox.text.talk_sprite = speaker
     end
 
+    local temp_old_actor = self.old_textbox_actor
+    self.old_textbox_actor = nil
+
     actor = actor or self.textbox_actor
     if isClass(actor) and actor:includes(Character) then
         actor = actor.actor
     end
     if actor then
+        local actor_id
+        if type(actor) == "string" then
+            actor_id = actor
+        else
+            actor_id = actor.id
+        end
+
+        local set_old_face = false
+        if temp_old_actor and (actor_id ~= temp_old_actor.id) then
+            self.textbox:actorDelay()
+        elseif temp_old_actor then
+            set_old_face = true
+        end
         self.textbox:setActor(actor)
+        if set_old_face then
+            self.textbox:setFace(self.old_portrait, self.old_portrait_x, self.old_portrait_y, true)
+        end
     end
 
     if options["top"] == nil and self.textbox_top == nil then
@@ -491,7 +521,12 @@ function WorldCutscene:text(text, portrait, actor, options)
 
     self.textbox.active = true
     self.textbox.visible = true
+
     self.textbox:setFace(portrait, options["x"], options["y"])
+
+    self.old_portrait = portrait
+    self.old_portrait_x = options["x"]
+    self.old_portrait_y = options["y"]
 
     if options["reactions"] then
         for id,react in pairs(options["reactions"]) do
@@ -523,7 +558,7 @@ function WorldCutscene:text(text, portrait, actor, options)
     self.textbox:setAuto(options["auto"])
 
     self.textbox:setText(text, function()
-        self.textbox:remove()
+        self.textbox:close()
         self:tryResume()
     end)
 
@@ -541,7 +576,7 @@ end
 
 function WorldCutscene:closeText()
     if self.textbox then
-        self.textbox:remove()
+        self.textbox:close()
         self.textbox = nil
     end
 end

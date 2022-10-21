@@ -40,6 +40,9 @@ function Textbox:init(x, y, width, height, default_font, default_font_size, batt
     self.box.debug_select = false
     self:addChild(self.box)
 
+    self.timer = Timer()
+    self:addChild(self.timer)
+
     self.battle_box = battle_box
     if battle_box then
         self.box.visible = false
@@ -74,6 +77,7 @@ function Textbox:init(x, y, width, height, default_font, default_font_size, batt
     self.font_size = self.default_font_size
 
     self.face = Sprite()
+    self.face.visible = false
     self.face.path = "face"
     self.face:setPosition(self.face_x, self.face_y)
     self.face:setScale(2, 2)
@@ -114,12 +118,33 @@ function Textbox:init(x, y, width, height, default_font, default_font_size, batt
     end, {instant = false})
 
     self.advance_callback = nil
+
+    self.close_delay = nil
+    self.actor_delay = false
+
+    self.cutscene = nil
+end
+
+function Textbox:actorDelay()
+    self.actor_delay = true
+    self.timer:after(8/30, function()
+        self.face.visible = true
+    end)
 end
 
 function Textbox:update()
     if not self:isTyping() then
         self.face:stop()
     end
+
+    if self.close_delay then
+        self.close_delay = self.close_delay - DTMULT
+        if self.close_delay <= 0 then
+            self.close_delay = nil
+            self:remove()
+        end
+    end
+
     super:update(self)
 end
 
@@ -145,6 +170,10 @@ function Textbox:setActor(actor)
     end
     self.actor = actor
 
+    if self.cutscene then
+        self.cutscene.old_textbox_actor = actor
+    end
+
     if self.actor and self.actor:getPortraitPath() then
         self.face.path = self.actor:getPortraitPath()
     else
@@ -152,18 +181,33 @@ function Textbox:setActor(actor)
     end
 end
 
-function Textbox:setFace(face, ox, oy)
-    self.face:setSprite(face)
-    self.face:play(4/30)
+function Textbox:setCutscene(cutscene)
+    self.cutscene = cutscene
+end
 
-    if self.actor then
-        local actor_ox, actor_oy = self.actor:getPortraitOffset()
-        ox = (ox or 0) + actor_ox
-        oy = (oy or 0) + actor_oy
+function Textbox:setFace(face, ox, oy, instant)
+    if face then
+        self:updateTextBounds(true)
     end
-    self.face:setPosition(self.face_x + (ox or 0), self.face_y + (oy or 0))
 
-    self:updateTextBounds()
+    local delay = 1/30
+    if instant then
+        delay = 0
+    end
+    self.timer:after(delay, function()
+        if not self.actor_delay then
+            self.face.visible = true
+        end
+        self.face:setSprite(face)
+        self.face:play(4/30)
+
+        if self.actor then
+            local actor_ox, actor_oy = self.actor:getPortraitOffset()
+            ox = (ox or 0) + actor_ox
+            oy = (oy or 0) + actor_oy
+        end
+        self.face:setPosition(self.face_x + (ox or 0), self.face_y + (oy or 0))
+    end)
 end
 
 function Textbox:setFont(font, size)
@@ -234,7 +278,24 @@ function Textbox:addFunction(id, func)
     self.text:addFunction(id, func)
 end
 
+function Textbox:close()
+    if self.text then
+        self.text:remove()
+    end
+    self.close_delay = 1
+end
+
 function Textbox:setText(text, callback)
+    if self.actor_delay then
+        self.timer:after(9/30, function()
+            self:setTextInstant(text, callback)
+        end)
+    else
+        self:setTextInstant(text, callback)
+    end
+end
+
+function Textbox:setTextInstant(text, callback)
     for _,reaction in ipairs(self.reaction_instances) do
         reaction:remove()
     end
@@ -263,8 +324,8 @@ function Textbox:getText()
     return self.text.text
 end
 
-function Textbox:updateTextBounds()
-    if self.face.texture then
+function Textbox:updateTextBounds(force)
+    if self.face.texture or force then
         self.text.x = self.text_x + 116
         self.text.width = self.width - 116 + self.wrap_add_w
     else
